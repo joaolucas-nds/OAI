@@ -192,3 +192,19 @@ Artefatos do ASU no repo antigo — `INSTRUCTION_GUIDE.md`, `PROMPT_IA.md`, `dem
 
 ### Consequências
 Estrutura alinhada ao KCM v1.122.0. Os 4 carimbos de versão conferem em v1.122.0. Próximo trabalho já roda sob o contrato novo (ritual por turno, modo Code com WOs).
+
+---
+
+## FIX-005 — Zero à esquerda comido na carga da planilha (dois sintomas, uma causa)
+**Data:** 2026-09-04 · **Status:** causa raiz identificada e reproduzida; correção ainda NÃO aplicada
+
+- **Sintoma** *[relatado pelo dono — nota `260814-1021.txt`, 2026-08-14]*: (a) quando o nome escolhido para renomear começa com `0`, o zero some do nome final; (b) um match cujo código tem `00` (dois zeros seguidos) foi ignorado.
+- **Causa raiz** *[medido por instrumento — reprodução determinística com pandas 3.0.2 em 2026-09-04]*: a planilha é carregada **sem `dtype=str`** (`main.py:1300` `read_csv`, `main.py:1305` `read_excel`, `test_matching.py:31` `read_csv`). Coluna cujos valores são todos numéricos é inferida como `int64`, e `00611` vira `611` **antes** de qualquer `str()` ou `.astype(str)` do código. Os dois sintomas são o mesmo defeito visto em duas colunas diferentes.
+- **Como (a) acontece:** a coluna do NOVO NOME é numérica → o valor já chega degradado em `main.py:377` (`str(linha[self.col_novo_nome])`) → o arquivo é renomeado para `611`.
+- **Como (b) acontece:** a coluna de MATCHING é numérica → a linha passa a valer `611`, que tem 3 caracteres e **não casa com `REGEX_CODIGO`** (`\b([A-Za-z]{0,4}\d[\dA-Za-z]{3,})\b` exige 4+). A linha fica com **zero códigos**; o arquivo tem `00611`; não há match por código; no motor v2 a guarda DEC-006 devolve `código_ausente` e o produto é ignorado. No motor antigo do `main.py` a contenção também falha (`len(cod_plan) >= 4` barra `611`) e sobra um fuzzy fraco contra a string `611`, abaixo do threshold.
+- **Por que o golden set não pegou:** `test_matching.py` casa contra a coluna `"Atual: 14/04/2026 - Anterior: 14/04/2026"`, cujos valores contêm texto — o pandas a lê como string e o zero sobrevive. O defeito só aparece com coluna **puramente numérica**, que é a configuração do dono na GUI. O harness tem o mesmo defeito de leitura e o exporia se o golden set exercitasse uma coluna de código pura.
+- **Correção prevista** (vai junto com a integração do motor v2 na GUI, para não editar `main.py` duas vezes): carregar com `dtype=str` **e** `keep_default_na=False`, num **único ponto compartilhado** pela GUI e pelo harness — hoje são duas cópias que já divergiram (`sep` detectado à mão × `sep=None`) e que voltariam a divergir.
+- **Efeito colateral que a mesma correção resolve:** `main.py:377` faz `str(linha[self.col_novo_nome])` sem `fillna` — célula vazia vira `NaN` e o nome sai com o literal `nan`. `keep_default_na=False` mata essa classe inteira.
+- **Risco da correção:** nenhum. *[medido — varredura de `main.py` em 2026-09-04]* nenhuma coluna do DataFrame é usada como número; as únicas leituras são `df[col_matching].fillna("").astype(str)` (241), `str(linha[self.col_novo_nome])` (377) e `str(linha[self.col_pasta_destino]).strip()` (393).
+- **O que NÃO está provado:** não tenho a planilha real do dono, então qual coluna ele tinha selecionado ao ver cada sintoma é *dedução*, não medição. A causa raiz está reproduzida; o mapeamento sintoma→coluna é a explicação mais econômica que cobre os dois relatos.
+- **Lição:** planilha é TEXTO. A inferência de tipo do pandas é uma armadilha silenciosa em qualquer coluna que seja identificador — não dá erro, não avisa, e o dano só aparece no nome do arquivo final. Vira armadilha em `CONTEXT.md` **junto com a correção**, não antes.

@@ -28,6 +28,7 @@
 - **GUI ainda no motor antigo**: enquanto não integrar, a interface não se beneficia do score ponderado nem da guarda de código ausente.
 - **Golden set pequeno (24 casos)**: cobre os casos críticos conhecidos, mas precisa crescer com a pasta real completa (164 pisos) e com outros grupos (louças) para medir generalização.
 - **Pesos não calibrados formalmente**: os pesos atuais (`PesosScore`) passam no golden set, mas não foram otimizados; valores são razoáveis, não ótimos.
+- **Zero à esquerda comido na carga da planilha (FIX-005)**: `read_csv`/`read_excel` sem `dtype=str` convertem coluna numérica em `int64` e `00611` vira `611`. Quebra o novo nome **e** mata o match por código (`611` tem 3 chars e nem casa com a regex, então a linha fica sem código e o produto é ignorado). Causa raiz reproduzida em 2026-09-04; atinge `main.py` e `test_matching.py`. Correção vai junto com a integração do motor na GUI.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 - [ ] Integrar `matching_engine.py` na GUI (`main.py`), removendo o `MotorMatching` embutido.
@@ -36,6 +37,8 @@
 - [ ] Dois thresholds separados (exibição × seleção) na UI.
 - [ ] Tornar `PesosScore` editável/persistível na aba Configurações.
 - [ ] Decidir tratamento do `código_ausente` na UI: aba separada "Código não cadastrado"?
+- [ ] Corrigir a carga da planilha (FIX-005): `dtype=str` + `keep_default_na=False` num loader único usado pela GUI e pelo harness. Vai junto com a integração do motor.
+- [ ] Ampliar o golden set com um caso de código de zero à esquerda contra uma coluna de código **pura** — a coluna descritiva usada hoje esconde o defeito.
 
 ## 📁 Arquivos Críticos (não mexer sem contexto)
 - `matching_engine.py` → coração do acerto v2. Ler CONTEXT «MOTOR DE MATCHING» + DEC-001/002/005/006 antes de tocar. Mudou? Rodar `test_matching.py` antes de aceitar.
@@ -47,5 +50,7 @@
 
 **Fecho (2026-09-03, sessão Code):** WO 0001 aplicada — âncoras exatas, verificações 1-4 OK — e empurrada no commit `0658523` (apenas `meta/STATUS.md` + `meta/CONTEXT.md`). O log do dia ganhou a seção da Conversa 2 no mesmo commit de fecho. O resto da migração KCM segue FORA do commit e é o próximo gesto do dono: modificados `meta/CEREBRO.md` / `meta/CHANGELOG.md` / `meta/DECISIONS.md` / `meta/IDEAS.md`; deleções `meta/CLAUDE.md` / `meta/HISTORICO.md` / `meta/INSTRUCTION_GUIDE.md` / `meta/PROMPT_IA.md` / `meta/demo.yaml`; não rastreados `.claude/` / `.gitignore` / `.flatdropignore` / `CLAUDE.md` / `INSTRUCOES-DO-PROJETO.md` / `meta/HISTORY.md` / `meta/SPEC.md` / `meta/workorders/` — o fecho inclui colar `INSTRUCOES-DO-PROJETO.md` na caixa de instruções do Projeto.
 **Pendência de código não registrada [relatado pelo dono, nota `../260814-1021.txt` de 2026-08-14]:** (a) nome escolhido que começa com `0` perde o zero inicial ao renomear; (b) match cujo código tem `00` (dois zeros seguidos) é ignorado. Não estão em IDEAS/DECISIONS — triar antes de retomar o backlog.
+
+**2026-09-04** — Fecho da migração KCM commitado (o passo que faltava desde 2026-09-03) e **triagem dos dois bugs órfãos da nota `260814-1021.txt`**: os dois têm a MESMA causa raiz, agora reproduzida — a planilha é carregada sem `dtype=str`, o pandas infere `int64` numa coluna numérica e come o zero à esquerda. Registrado em FIX-005. A correção NÃO foi aplicada nesta conversa de propósito: ela cai em `main.py` na mesma região que a integração do motor v2 vai refatorar, e fazer as duas de uma vez evita dois diffs conflitantes no mesmo arquivo. Nenhuma linha de código tocada. Próxima frente: integrar `matching_engine.py` na GUI **com** a correção da carga.
 
 **2026-05-31 (2ª sessão)** — Construído o motor v2 modular, o golden set (24 casos reais) e o harness. Partindo de 54% → 100% no golden set após 3 correções fundamentadas: (1) excluir medidas da extração de código, (2) medida como campo discriminante com penalidade de divergência (DEC-005), (3) guarda de código ausente (DEC-006, decisão do usuário). Pesquisa de record linkage (Fellegi-Sunter) confirmou a abordagem field-weighted. **Correção importante recebida do usuário:** a ferramenta NÃO é só para pisos, e medidas NÃO são quase todas iguais (27 distintas em 80 linhas) — premissa minha estava errada, dados confirmaram. Próximo passo óbvio: integrar o motor v2 na GUI e exibir a transparência do match.

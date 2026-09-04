@@ -66,6 +66,9 @@ Padrões coletados: barra de ações contextual flutuante ao selecionar linhas (
 
 ---
 
+### 2026-09-04 — Loader único de planilha (GUI + harness)
+Hoje a planilha é carregada em dois lugares independentes — `main.py` (detecta encoding e separador à mão) e `test_matching.py` (`sep=None`) — e os dois carregam errado da mesma forma (FIX-005: sem `dtype=str`). Reunir num `carregar_planilha()` compartilhado faz a correção acontecer uma vez só, torna a carga testável isoladamente (hoje ela vive dentro de um método Qt) e tira uma duplicação que a integração do motor na GUI herdaria. Entra junto com essa integração.
+
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
 - **Match hierárquico código→fuzzy** — implementado / ver DEC-001.
