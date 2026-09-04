@@ -6,6 +6,12 @@
 
 ---
 
+## Estrutura de Documentação (KCM v1.122.0)
+Este projeto migrou do layout flat antigo (KCM pré-v1.90) para o contrato atual:
+- **Raiz:** `CLAUDE.md` (guia raiz do Claude Code), `.claude/settings.json` (permissões), `.claude/skills/{apply-wo,wrap}/SKILL.md` (comandos do modo Code), `.gitignore`, `.flatdropignore`.
+- **`meta/`:** `CEREBRO.md` (comportamento do assistente), `CONTEXT.md`, `STATUS.md`, `DECISIONS.md`, `CHANGELOG.md`, `IDEAS.md`, `ROADMAP.md`, `GLOSSARY.md`, `HISTORY.md`, `SPEC.md`, `LOG-TEMPLATE.md`, `workorders/_TEMPLATE.md`.
+- **Modo:** Code ligado (ASU desligado). Ver DEC-007 para a migração.
+
 ## Visão Geral
 Ferramenta desktop (Windows) que organiza arquivos em massa usando uma planilha como fonte de verdade. Lê um CSV/XLSX exportado do Google Sheets, varre uma pasta de arquivos (imagens de produtos: pisos, louças, etc.), e associa cada arquivo físico a uma linha da planilha por **código de referência** e/ou **comparação aproximada de nome (fuzzy)**. A partir do match, permite renomear, copiar e mover os arquivos em massa — com preview, seleção manual e log auditável. O usuário é dono de uma loja de materiais de construção e mantém ~milhares de itens cujas imagens precisam ser nomeadas e agrupadas segundo a planilha do sistema.
 
@@ -87,6 +93,7 @@ Compara a *base* do nome do arquivo (sem extensão, sem sufixo, normalizada) com
 7. **Ler CSV do Google Sheets sem `utf-8-sig`** — vira `CÃ³digo ReferÃªncia`. → Detectar encoding (chardet) com fallback `utf-8-sig`.
 8. **Deixar a regex de código capturar dimensões** — `33X57`, `50MT²` parecem código e fazem produtos de mesma medida casarem entre si (confiança 100 falsa). → Excluir medidas/dimensões de `extrair_codigos` (FIX-004). Medida é campo discriminante (DEC-005), nunca âncora de código.
 9. **Assumir que medida é ruído / que a ferramenta é só para pisos** — FALSO: 27 medidas distintas em 80 linhas; a ferramenta atende vários grupos de produto. Medida discrimina e a planilha varia por grupo. → Tratar medida como campo discriminante com penalidade de divergência (DEC-005).
+10. **Deduzir a estrutura do repositório a partir do mount** — O mount do Projeto é ACHATADO: não tem subpastas, então `meta/CEREBRO.md` chega como `CEREBRO.md` e `.claude/skills/wrap/SKILL.md` chega como `SKILL__wrap.md`. Deduzir layout daí produz conclusão errada sobre o repo real (já custou uma volta inteira: gerou-se uma "limpeza" de arquivos que já estavam nos lugares certos). → **Ler `_MANIFEST_OAI.md` primeiro**: ele mapeia cada nome plano ao caminho original, traz a raiz em disco e uma foto do Git (último commit, modificados, não rastreados). Nomes com ponto inicial chegam com `_` (`.gitignore` → `_gitignore`).
 
 ## Contexto de Produto
 - **Usuário-alvo:** dono/operador de loja de materiais de construção que mantém imagens de produtos e uma planilha-mestre (Google Sheets) com marca, código de referência, descrição, tipo, material, etc.
