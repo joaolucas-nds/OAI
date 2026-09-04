@@ -164,3 +164,31 @@ Acaba com a classe de falso positivo "código quase igual". Arquivos de produtos
 - **Causa raiz:** `extrair_codigos` capturava `33X57` e `50MT` (de `2,50MT²`) como se fossem códigos de referência; a comparação bidirecional então casava qualquer par que compartilhasse a mesma medida.
 - **Solução:** excluir de `extrair_codigos` tudo que seja medida (`extrair_medidas`), fragmento de medida (`\d{2}MT\d*`) ou dimensão isolada (`\d{1,3}X\d{1,3}`). Medida passou a ser tratada só como campo discriminante (DEC-005), nunca como âncora de código.
 - **Lição:** a regex de código é permissiva por necessidade (códigos têm formatos variados); por isso precisa de uma lista de exclusão explícita para tokens que PARECEM código mas são dimensão. Virou armadilha #8 em CONTEXT.
+
+---
+
+## DEC-007 — Migração para o contrato KCM v1.122.0 (layout meta/ + modo Code)
+**Data:** 2026-09-03 · **Status:** aceita
+
+### Contexto
+O projeto estava no layout flat antigo do KCM (pré-v1.90): todos os `.md` na raiz, um `CLAUDE.md` que era na verdade o CEREBRO (comportamento), sem `.claude/` nem `meta/`. Chegou o template-update v1.122.0 com o contrato novo.
+
+### Decisão
+Migração completa para o contrato atual:
+1. **`CLAUDE.md` antigo (= CEREBRO antigo) descartado** e substituído. Varredura confirmou que continha 100% regra genérica do KCM — nenhum princípio/decisão personalizado do projeto. As convenções que tinha já vivem no CONTEXT (específicas) e no CEREBRO novo (genéricas refinadas).
+2. **`meta/CEREBRO.md`** (novo) assume o comportamento do assistente; **`CLAUDE.md`** (raiz, novo) assume o papel de guia raiz do Claude Code — necessário porque o Claude Code exige `CLAUDE.md` na raiz.
+3. **`HISTORICO.md` → `meta/HISTORY.md`** (renomeação do contrato novo).
+4. **Demais docs vivos** (CONTEXT, STATUS, DECISIONS, CHANGELOG, IDEAS, ROADMAP, GLOSSARY) preservados integralmente, reposicionados em `meta/`.
+5. **Modo Code ligado** (skills `apply-wo` e `wrap` adotadas); **ASU desligado** (removido; projeto com Code não usa ASU).
+
+### Linhas revogadas eliminadas por substituição
+REV-2 (bloco git pronto para copiar), REV-3 (par sessão/turno), REV-4 (nunca blocos soltos) viviam no CLAUDE.md/CEREBRO antigos — morreram com o descarte, sem edição manual. A varredura por fato confirmou que não se espalharam para outros arquivos vivos, exceto como relato histórico (preservado). REV-1 (esperar sinal de upload) não estava presente.
+
+### Carimbo de modos
+Detectada SOBRA do modo ASU (marcador `## Saída de código via ASU (patch)` presente no CEREBRO antigo com ASU declarado `não`). Eliminada na substituição — o CEREBRO novo nasce sem a seção.
+
+### Pendências de limpeza (decisão do usuário)
+Artefatos do ASU no repo antigo — `INSTRUCTION_GUIDE.md`, `PROMPT_IA.md`, `demo.yaml` — ficam fora de `meta/`. Candidatos a remoção já que o ASU foi desativado; confirmar se algum tem valor de referência antes de apagar.
+
+### Consequências
+Estrutura alinhada ao KCM v1.122.0. Os 4 carimbos de versão conferem em v1.122.0. Próximo trabalho já roda sob o contrato novo (ritual por turno, modo Code com WOs).

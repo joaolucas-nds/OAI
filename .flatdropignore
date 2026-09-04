@@ -1,0 +1,36 @@
+# .flatdropignore — enxuga o que sobe ao Projeto do Claude (tudo segue versionado no git).
+# Sintaxe .gitignore; salvo na raiz; tem a palavra final sobre o .gitignore.
+#
+# COMO ESTE ARQUIVO E ORGANIZADO:
+# - Explicacao e comentario ficam AQUI EM CIMA, fora do bloco. Dentro do bloco eles somem:
+#   o editor do FlatDrop reescreve o bloco inteiro a cada salvamento.
+# - REGRA (o que some do mount) vai DENTRO do bloco do editor, delimitado no fim do arquivo.
+# - NADA depois da linha que FECHA o bloco: vale a ULTIMA regra que casa, entao o que vier
+#   depois vence o bloco.
+# - NAO reproduza as linhas marcadoras aqui em cima: o editor as procura por substring, e um
+#   exemplo em comentario e indistinguivel de um segundo bloco. Descreva, nao cite.
+#
+# FORMA: use "pasta/*" (o CONTEUDO), nunca "pasta/" (a PASTA). Motivo real: a ferramenta que le
+# este arquivo costuma PODAR o diretorio casado antes de descer, e um "!" la dentro nunca chega
+# a ser avaliado (no git puro a limitacao e documentada: nao se reinclui arquivo sob pasta
+# excluida). Com "pasta/*" a varredura desce e o "!arquivo" volta a valer.
+# Corolario: modelo/guia de pasta ignorada precisa do PAR completo — a linha "pasta/*" e a
+# linha "!pasta/_TEMPLATE.md" logo depois dela, dentro do bloco.
+#
+# Logs do dia: o "agora" fica no meta/STATUS.md; o diario nao precisa ir ao mount.
+# Analises (meta/analises/, uma por decisao nao-trivial; a pasta nasce no primeiro uso):
+# enquanto forem POUCAS, deixe subir — a analise "Em discussao" precisa ser relida no turno
+# seguinte, e analise que o assistente nao ve nao e discutida, e reescrita do zero. Quando
+# pesarem, acrescente ESTE PAR dentro do bloco (modelo sempre sobe; corpo, nao):
+#   meta/analises/*
+#   !meta/analises/_TEMPLATE.md
+#
+# WOs aplicadas: o desfecho vive em meta/DECISIONS.md e meta/CHANGELOG.md; o corpo pesa.
+# Para estudar UMA WO no Projeto, reinclua nominalmente: !meta/workorders/<arquivo>.md
+# (a linha do "!" vai dentro do bloco, logo depois de meta/workorders/*)
+
+# >>> flatdrop-editor
+logs/*
+meta/workorders/*
+!meta/workorders/_TEMPLATE.md
+# <<<

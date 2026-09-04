@@ -1,0 +1,6 @@
+# .gitignore — lixo de SO / editor. NAO ignore .claude/, meta/ nem logs/ (versionados de proposito).
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

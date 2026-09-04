@@ -79,6 +79,15 @@ Padrões coletados: barra de ações contextual flutuante ao selecionar linhas (
 
 ---
 
+
+## 🛌 Adiadas
+> Ideia boa, fora de hora. Volta quando o contexto mudar — não é rejeição, é timing.
+_(vazio)_
+
+## 📮 Feedback para o Kit
+> Desvios registrados do contrato KCM e sugestões para o kit evoluir.
+- **2026-09-03** — Migração v1.122.0 aplicada (ver DEC-007). Projeto vinha do layout flat pré-v1.90; migração limpa, sem conteúdo personalizado perdido.
+
 ## 🚫 Descartadas
 > Ideia avaliada e recusada. O motivo evita reabrir a discussão depois.
 - **`token_set_ratio` como scorer principal** — descartado porque retorna 100 para subconjuntos, inflando score de pouca semelhança (DEC-002).

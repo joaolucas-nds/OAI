@@ -10,6 +10,19 @@
 
 ---
 
+## [0.4.1] — 2026-09-03
+### Modificado
+- **Migração para o contrato KCM v1.122.0** — layout `meta/` + `.claude/`, modo Code ligado, ASU desligado. Ver DEC-007.
+- `CLAUDE.md` antigo (CEREBRO antigo) descartado e substituído por `meta/CEREBRO.md` (novo) + `CLAUDE.md` raiz (guia do Claude Code).
+- `HISTORICO.md` renomeado para `meta/HISTORY.md`.
+- Demais docs vivos preservados e reposicionados em `meta/`.
+### Adicionado
+- `.claude/skills/apply-wo/SKILL.md` e `.claude/skills/wrap/SKILL.md` (comandos do modo Code).
+- `.claude/settings.json`, `.gitignore`, `.flatdropignore`, `meta/SPEC.md`, `meta/workorders/_TEMPLATE.md`.
+### Removido
+- Seção `## Saída de código via ASU (patch)` (sobra do modo ASU, agora desligado).
+- Linhas revogadas REV-2/REV-3/REV-4 (eliminadas junto com o CEREBRO antigo).
+
 ## [0.4.0] — 2026-05-31
 ### Adicionado
 - **Motor de matching v2 modular** (`matching_engine.py`): puro Python, sem PySide6, testável isoladamente — ver DEC-002 e ROADMAP F2.
