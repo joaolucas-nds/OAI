@@ -15,7 +15,18 @@ from copy import deepcopy
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
-from rapidfuzz import fuzz, process
+# O motor v2 e o loader vivem em UTILITÁRIOS/. A pasta entra no sys.path em vez
+# de virar pacote: nao renomeia nada e nao depende de o nome da pasta ser um
+# identificador Python valido (ele tem acento).
+sys.path.insert(0, str(Path(__file__).resolve().parent / "UTILITÁRIOS"))
+
+from matching_engine import (  # noqa: E402  (depende do sys.path acima)
+    MotorMatching,
+    PesosScore,
+    limpar_valor_planilha,
+    reescrever_sufixo,
+)
+from spreadsheet_loader import carregar_planilha, coluna_como_texto  # noqa: E402
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -61,12 +72,6 @@ CONFIG_PADRAO = {
 CHARS_PROIBIDOS = r'\/:*?"<>|'
 REGEX_CHARS_PROIBIDOS = re.compile(r'[\\/:*?"<>|]')
 
-# Regex para extração de código:
-# Captura sequências alfanuméricas com 4+ chars que contenham ao menos 1 dígito
-# Ex: 1660730013300, 00491, PR12147, 32HDA60
-REGEX_CODIGO = re.compile(r'\b([A-Za-z]{0,4}\d[\dA-Za-z]{3,})\b')
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # UTILITÁRIOS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,90 +100,6 @@ def salvar_config(cfg: dict):
         print(f"[AVISO] Não foi possível salvar config: {e}")
 
 
-def limpar_valor_planilha(texto: str) -> str:
-    """
-    Remove sufixos de controle interno da loja (* # + !) do fim do valor
-    da planilha, sem alterar o restante do nome.
-    Ex: 'PISO POL RETIF PR70671 70X70 *' → 'PISO POL RETIF PR70671 70X70'
-    """
-    if not isinstance(texto, str):
-        texto = str(texto)
-    # Remove * # + ! e espaços no final (podem aparecer sozinhos ou combinados)
-    texto = re.sub(r'[\s*#+!]+$', '', texto)
-    return texto.strip()
-
-
-def normalizar_texto(texto: str) -> str:
-    """
-    Normaliza string para comparação fuzzy:
-    - Converte para maiúsculas
-    - Remove caracteres especiais: * # + ! ( ) [ ] e similares
-    - Substitui hífens e underscores por espaço
-    - Colapsa espaços múltiplos
-    """
-    if not isinstance(texto, str):
-        texto = str(texto)
-    texto = texto.upper()
-    texto = re.sub(r'[*#+!\(\)\[\]\{\}²³°]', ' ', texto)
-    texto = re.sub(r'[-_/\\]', ' ', texto)
-    texto = re.sub(r'\s+', ' ', texto)
-    return texto.strip()
-
-
-def extrair_codigos(texto: str) -> list[str]:
-    """
-    Extrai todos os códigos alfanuméricos do texto usando REGEX_CODIGO.
-    Retorna lista de strings normalizadas em maiúsculas.
-    Exemplos:
-        '1660730013300'       → ['1660730013300']
-        'PR12147'             → ['PR12147']
-        'ALMEIDA - 00611 -'   → ['00611']
-        '32HDA60 32X62'       → ['32HDA60', '32X62'] (32X62 tem 5 chars e 1 dígito → captura)
-    """
-    return [m.upper() for m in REGEX_CODIGO.findall(texto)]
-
-
-def separar_sufixos(nome_arquivo: str, sufixos_cfg: list[dict]) -> tuple[str, str]:
-    """
-    Separa a base do nome do arquivo dos sufixos configurados.
-    Retorna (base_sem_sufixo, sufixo_original).
-
-    Ex: 'ALMEIDA - 00611 - PISO XYZ (A)' com sufixo '(A)'
-        → ('ALMEIDA - 00611 - PISO XYZ', '(A)')
-    """
-    nome = nome_arquivo.strip()
-    sufixo_encontrado = ""
-
-    # Ordena sufixos do maior para menor para evitar match parcial
-    sufixos_ordenados = sorted(
-        sufixos_cfg, key=lambda s: len(s["detectar"]), reverse=True
-    )
-
-    for entrada in sufixos_ordenados:
-        detectar = entrada["detectar"].strip()
-        if not detectar:
-            continue
-        # Case-insensitive, no final do nome
-        padrao = re.compile(re.escape(detectar) + r'\s*$', re.IGNORECASE)
-        match = padrao.search(nome)
-        if match:
-            sufixo_encontrado = detectar
-            nome = nome[:match.start()].strip()
-            break
-
-    return nome, sufixo_encontrado
-
-
-def reescrever_sufixo(sufixo_original: str, sufixos_cfg: list[dict]) -> str:
-    """Converte sufixo detectado para o formato configurado pelo usuário."""
-    if not sufixo_original:
-        return ""
-    for entrada in sufixos_cfg:
-        if entrada["detectar"].strip().lower() == sufixo_original.strip().lower():
-            return entrada["reescrever"].strip()
-    return sufixo_original
-
-
 def sanitizar_nome_arquivo(nome: str) -> str:
     """Remove caracteres proibidos do Windows de um nome de arquivo."""
     return REGEX_CHARS_PROIBIDOS.sub('_', nome).strip()
@@ -203,114 +124,6 @@ def nome_sem_colisao(pasta_destino: Path, nome_arquivo: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MOTOR DE MATCHING
-# ─────────────────────────────────────────────────────────────────────────────
-
-class MotorMatching:
-    """
-    Encapsula toda a lógica de correspondência entre nome de arquivo e planilha.
-    Prioridade:
-      1. Match por código (regex, bidirecional) — confiança 100
-      2. Match fuzzy por token_set_ratio — confiança variável
-    """
-
-    def __init__(self, df: pd.DataFrame, col_matching: str, sufixos_cfg: list[dict]):
-        self.df = df.copy()
-        self.col_matching = col_matching
-        self.sufixos_cfg = sufixos_cfg
-
-        # Pré-computa textos limpos (sem * # +) e normalizados de cada linha
-        self.nomes_planilha: list[str] = [
-            limpar_valor_planilha(v)
-            for v in df[col_matching].fillna("").astype(str).tolist()
-        ]
-        self.nomes_norm: list[str] = [normalizar_texto(n) for n in self.nomes_planilha]
-        self.codigos_planilha: list[list[str]] = [
-            extrair_codigos(n) for n in self.nomes_planilha
-        ]
-
-    def buscar(self, nome_arquivo: str, threshold: int) -> dict | None:
-        """
-        Retorna o melhor match para nome_arquivo ou None se abaixo do threshold.
-
-        Retorno:
-          {
-            "indice_df": int,
-            "nome_planilha": str,
-            "score": int,
-            "metodo": "codigo" | "fuzzy",
-            "base_arquivo": str,
-            "sufixo_original": str,
-          }
-        """
-        # ── Pré-processa o nome do arquivo ─────────────────────────────────
-        nome_sem_ext = Path(nome_arquivo).stem
-        base, sufixo_original = separar_sufixos(nome_sem_ext, self.sufixos_cfg)
-        codigos_arquivo = extrair_codigos(base)
-
-        # ── PRIORIDADE 1: match por código (BIDIRECIONAL) ───────────────────
-        # Casos reais encontrados no CSV do usuário:
-        #   Arquivo: PR70671 → Planilha: PR7067  (cod_plan IN cod_arq)
-        #   Arquivo: R70181  → Planilha: R7018   (cod_plan IN cod_arq)
-        #   Arquivo: R70031  → sem código na planilha (fallback para fuzzy)
-        if codigos_arquivo:
-            melhor_idx = None
-            melhor_comprimento = 0
-            for cod_arq in codigos_arquivo:
-                for idx, cods_plan in enumerate(self.codigos_planilha):
-                    for cod_plan in cods_plan:
-                        match_exato = (cod_arq == cod_plan)
-                        # Arq contém plan: PR70671 ⊇ PR7067 → True
-                        match_plan_em_arq = (len(cod_plan) >= 4 and cod_plan in cod_arq)
-                        # Plan contém arq: casos onde planilha tem código mais longo
-                        match_arq_em_plan = (len(cod_arq) >= 4 and cod_arq in cod_plan)
-
-                        if match_exato or match_plan_em_arq or match_arq_em_plan:
-                            # Prefere o match com o código mais longo (mais específico)
-                            comp = max(len(cod_arq), len(cod_plan))
-                            if comp > melhor_comprimento:
-                                melhor_comprimento = comp
-                                melhor_idx = idx
-
-            if melhor_idx is not None:
-                return {
-                    "indice_df": melhor_idx,
-                    "nome_planilha": self.nomes_planilha[melhor_idx],
-                    "score": 100,
-                    "metodo": "código",
-                    "base_arquivo": base,
-                    "sufixo_original": sufixo_original,
-                }
-
-        # ── PRIORIDADE 2: fuzzy matching com token_set_ratio ────────────────
-        # token_set_ratio é superior ao token_sort_ratio para o nosso caso:
-        # captura bem casos onde o arquivo tem descrição parcial da planilha,
-        # Ex: 'PISO BRIL RETIF HD 70070' matchando 'ROCHA FORTE - PISO BRIL RETIF HD 70070 70X70'
-        base_norm = normalizar_texto(base)
-        if not base_norm:
-            return None
-
-        resultado = process.extractOne(
-            base_norm,
-            self.nomes_norm,
-            scorer=fuzz.token_set_ratio,
-            score_cutoff=threshold,
-        )
-        if resultado is None:
-            return None
-
-        nome_match, score, idx = resultado
-        return {
-            "indice_df": idx,
-            "nome_planilha": self.nomes_planilha[idx],
-            "score": int(score),
-            "metodo": "fuzzy",
-            "base_arquivo": base,
-            "sufixo_original": sufixo_original,
-        }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # THREAD DE VARREDURA
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -323,10 +136,16 @@ class ThreadVarredura(QThread):
     erro = Signal(str)
 
     def __init__(self, pasta_raiz: str, motor: MotorMatching,
-                 threshold: int, col_novo_nome: str, col_pasta_destino: str):
+                 df, sufixos_cfg: list[dict], threshold: int,
+                 col_novo_nome: str, col_pasta_destino: str):
         super().__init__()
         self.pasta_raiz = Path(pasta_raiz)
         self.motor = motor
+        # O motor v2 e puro Python e NAO carrega o DataFrame (DEC-002), entao o
+        # df e a config de sufixos vem por fora — antes vinham por dentro do
+        # motor antigo (motor.df, motor.sufixos_cfg).
+        self.df = df
+        self.sufixos_cfg = sufixos_cfg
         self.threshold = threshold
         self.col_novo_nome = col_novo_nome
         self.col_pasta_destino = col_pasta_destino
@@ -348,23 +167,33 @@ class ThreadVarredura(QThread):
             for i, arq in enumerate(arquivos):
                 self.progresso.emit(int((i + 1) / total * 100))
 
-                match = self.motor.buscar(arq.name, self.threshold)
-                if match is None:
-                    sem_match.append(str(arq))
+                res = self.motor.buscar(arq.name, self.threshold)
+
+                # O v2 sempre devolve um Resultado; "sem match" e indice None.
+                # metodo pode ser "código_ausente" (DEC-006): arquivo com codigo
+                # claro que nao existe na planilha. Por ora cai em "Sem
+                # correspondência" como qualquer outro, mas levando o motivo.
+                if res.indice is None:
+                    if res.metodo == "código_ausente":
+                        sem_match.append(f"{arq}  [código não cadastrado]")
+                    else:
+                        sem_match.append(str(arq))
                     continue
 
-                idx = match["indice_df"]
-                linha = self.motor.df.iloc[idx]
+                idx = res.indice
+                linha = self.df.iloc[idx]
 
                 # Determina novo nome (limpa * # + da planilha)
-                if self.col_novo_nome and self.col_novo_nome in self.motor.df.columns:
+                if self.col_novo_nome and self.col_novo_nome in self.df.columns:
                     novo_nome_base = limpar_valor_planilha(str(linha[self.col_novo_nome]))
                 else:
-                    novo_nome_base = match["nome_planilha"]  # já foi limpo no MotorMatching
+                    novo_nome_base = self.motor.nomes_planilha[idx]  # ja limpo no motor
 
-                # Aplica mapeamento de sufixo
+                # Aplica mapeamento de sufixo. O v2 detecta sufixos COMPOSTOS e
+                # devolve "(A) v2"; o reescrever_sufixo do motor trata cada parte
+                # e preserva a ordem — o do main.py nao tratava.
                 sufixo_reescrito = reescrever_sufixo(
-                    match["sufixo_original"], self.motor.sufixos_cfg
+                    res.sufixo_original, self.sufixos_cfg
                 )
                 if sufixo_reescrito:
                     novo_nome_base = f"{novo_nome_base} {sufixo_reescrito}"
@@ -373,22 +202,27 @@ class ThreadVarredura(QThread):
 
                 # Pasta destino
                 pasta_destino_val = ""
-                if self.col_pasta_destino and self.col_pasta_destino in self.motor.df.columns:
+                if self.col_pasta_destino and self.col_pasta_destino in self.df.columns:
                     pasta_destino_val = str(linha[self.col_pasta_destino]).strip()
 
                 correspondencias.append({
                     "selecionado": True,
                     "caminho_original": str(arq),
                     "nome_original": arq.name,
-                    "base_detectada": match["base_arquivo"],
-                    "sufixo_detectado": match["sufixo_original"],
+                    "base_detectada": res.base,
+                    "sufixo_detectado": res.sufixo_original,
                     "sufixo_reescrito": sufixo_reescrito,
-                    "nome_planilha": match["nome_planilha"],
-                    "score": match["score"],
-                    "metodo": match["metodo"],
+                    "nome_planilha": self.motor.nomes_planilha[idx],
+                    "score": res.score,
+                    "metodo": res.metodo,
                     "novo_nome": novo_nome,
                     "pasta_destino": pasta_destino_val,
                     "indice_df": idx,
+                    # Transparencia do match — ainda NAO exibida na tabela.
+                    # Guardada agora para a WO seguinte nao mexer aqui de novo.
+                    "componentes": res.componentes,
+                    "codigo_casado": res.codigo_casado,
+                    "ambiguo": res.ambiguo,
                 })
 
             # Ordena por score decrescente
@@ -1351,14 +1185,20 @@ class JanelaPrincipal(QMainWindow):
         threshold = self.slider_threshold.value()
         sufixos = self.cfg.get("sufixos", CONFIG_PADRAO["sufixos"])
 
-        self.motor = MotorMatching(self.df, col_matching, sufixos)
+        # O v2 recebe a coluna ja como lista de strings — ele nao conhece pandas.
+        self.motor = MotorMatching(
+            coluna_como_texto(self.df, col_matching),
+            sufixos,
+            PesosScore(),
+        )
 
         self.barra_varredura.setVisible(True)
         self.barra_varredura.setValue(0)
         self.status.showMessage("Escaneando arquivos…")
 
         self.thread_varredura = ThreadVarredura(
-            pasta_raiz, self.motor, threshold, col_novo_nome, col_pasta_destino
+            pasta_raiz, self.motor, self.df, sufixos, threshold,
+            col_novo_nome, col_pasta_destino
         )
         self.thread_varredura.progresso.connect(self.barra_varredura.setValue)
         self.thread_varredura.resultado_pronto.connect(self._on_resultado_pronto)
