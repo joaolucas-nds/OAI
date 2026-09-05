@@ -8,7 +8,6 @@ import os
 import re
 import json
 import shutil
-import chardet
 from pathlib import Path
 from datetime import datetime
 from copy import deepcopy
@@ -94,21 +93,6 @@ def salvar_config(cfg: dict):
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[AVISO] Não foi possível salvar config: {e}")
-
-
-def detectar_encoding(caminho: str) -> str:
-    """Usa chardet para detectar encoding do arquivo; fallback utf-8-sig."""
-    try:
-        with open(caminho, "rb") as f:
-            raw = f.read(32768)
-        resultado = chardet.detect(raw)
-        enc = resultado.get("encoding") or "utf-8-sig"
-        # Normalizar variantes do UTF-8 com BOM
-        if enc.lower() in ("utf-8-sig", "utf-8-bom"):
-            return "utf-8-sig"
-        return enc
-    except Exception:
-        return "utf-8-sig"
 
 
 def limpar_valor_planilha(texto: str) -> str:
@@ -1291,20 +1275,9 @@ class JanelaPrincipal(QMainWindow):
             return
 
         try:
-            if caminho.lower().endswith(".csv"):
-                enc = detectar_encoding(caminho)
-                # Tenta detectar separador
-                with open(caminho, encoding=enc, errors="replace") as f:
-                    primeira_linha = f.readline()
-                sep = ";" if primeira_linha.count(";") > primeira_linha.count(",") else ","
-                self.df = pd.read_csv(
-                    caminho, encoding=enc, sep=sep,
-                    on_bad_lines="skip", low_memory=False
-                )
-            else:
-                self.df = pd.read_excel(caminho, engine="openpyxl")
-
-            self.df.columns = [str(c).strip() for c in self.df.columns]
+            # Carga SEMPRE como texto — ver FIX-005. A limpeza dos nomes de
+            # coluna acontece dentro de carregar_planilha().
+            self.df = carregar_planilha(caminho)
             self._preencher_comboboxes()
             self.lbl_csv.setText(f"{Path(caminho).name}  ({len(self.df)} linhas)")
             self.lbl_csv.setStyleSheet("color: green; font-size: 12px;")

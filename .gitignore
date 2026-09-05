@@ -4,3 +4,9 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# Bytecode do Python. Aparece assim que o harness roda e nao tem por que
+# ser versionado. Nao ha `rm -rf` disponivel ao executor (deny no settings),
+# entao ignorar e a unica limpeza barata.
+__pycache__/
+*.py[cod]

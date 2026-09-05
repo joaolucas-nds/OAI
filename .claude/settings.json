@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Read", "Write", "Edit", "Grep", "Glob",
-      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(git push:*)"
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
+      "Bash(git add:*)", "Bash(git commit:*)", "Bash(git push:*)",
+      "Bash(python:*)", "Bash(py:*)"
     ],
     "deny": ["Bash(rm -rf:*)"],
     "additionalDirectories": ["../"]
