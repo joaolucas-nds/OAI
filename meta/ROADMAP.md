@@ -18,8 +18,8 @@
 - [x] Substituir `token_set_ratio` por score ponderado (token_sort + WRatio + cobertura + medida discriminante) — DEC-002. *(0.4.0)*
 - [x] Criar golden set inicial (24 casos críticos) + harness que reporta % de acerto. *(0.4.0)*  → expandir para a pasta completa segue pendente.
 - [x] Score com transparência: motor devolve componentes/código casado/ambiguidade. *(0.4.0, falta exibir na UI)*
-- [ ] **Integrar o motor v2 na GUI** (trocar o `MotorMatching` embutido pela importação do módulo).
-- [ ] Exibir transparência na tabela (componentes, código casado, alerta de ambiguidade).
+- [x] **Integrar o motor v2 na GUI** (trocar o `MotorMatching` embutido pela importação do módulo). *(0.4.3, WO 0005)*
+- [ ] Exibir transparência na tabela (componentes, código casado, alerta de ambiguidade). *(chaves já chegam ao dict desde 0.4.3, falta a UI)*
 - [ ] Expandir o golden set (pasta real completa de 164 pisos + louças).
 - [ ] Dois thresholds separados: exibição × seleção.
 - [ ] Tornar `PesosScore` editável e persistível na aba Configurações.

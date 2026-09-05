@@ -7,9 +7,10 @@
 ---
 
 ## Versão Atual
-**[0.4.0]** — 2026-05-31 — motor de matching v2 modular e testável (`matching_engine.py`), separado da GUI. Score ponderado substitui o `token_set_ratio`. Golden set de 24 casos reais passa 100%. GUI 0.3.1 ainda não integrada ao motor v2.
+**[0.4.3]** — 2026-09-05 — GUI (`main.py`) passa a usar o motor de matching v2. Removidos o `MotorMatching` embutido, a `REGEX_CODIGO` duplicada e os cinco utilitários atrasados; `ThreadVarredura` recebe `df`/`sufixos_cfg` por fora e consome o `Resultado` do motor. Conserta de quebra o `NameError` deixado pelo corte Parte A/Parte B da WO 0003 (`carregar_planilha` chamado sem import). `main.py` de 1458 para 1298 linhas.
 
 ## ✅ Funcionando
+- **GUI usa o motor v2** — `main.py` importa `matching_engine.py` e `spreadsheet_loader.py` de `UTILITÁRIOS/`; nada de motor embutido restando (WO 0005, 2026-09-05).
 - **Motor v2 modular (`matching_engine.py`)** — puro Python, sem PySide6, testável isoladamente.
 - **Score ponderado (DEC-002)**: token_sort + WRatio + cobertura de tokens + medida como campo discriminante. Nota alta agora = semelhança real.
 - **Medida como campo discriminante (DEC-005)**: bônus se coincide, **penalidade forte se diverge** (27 medidas distintas nos dados reais → discrimina de verdade).
@@ -18,21 +19,17 @@
 - **Match por código bidirecional** (P1) — resolve `PR70671↔PR7067`, `R70181↔R7018`.
 - **Sufixos compostos** (`(A)v2`) detectados e reescritos preservando ordem.
 - **Golden set + harness** (`UTILITÁRIOS/test_matching.py`): **24/24 (100%)** contra a referência congelada `test/planilha_referencia.csv`. Roda **sem argumentos** e devolve código de erro (0/1/2) — ver DEC-008. Chave é o `Interno`, não o índice da linha.
-- (Herdado da GUI 0.3.1) carregamento CSV/XLSX, 5 ações, log+desfazer, sufixos configuráveis, persistência.
+- (Herdado da GUI, agora 0.4.3) carregamento CSV/XLSX, 5 ações, log+desfazer, sufixos configuráveis, persistência.
 
 ## 🔧 Em Progresso
-- **Integração motor v2 ↔ GUI**: a GUI (`main.py` 0.3.1) ainda usa o `MotorMatching` antigo embutido. Próximo passo é trocar pela importação do `matching_engine.py`.
-- **Transparência do match na UI**: o motor já devolve `componentes` (scores parciais, código casado, estado da medida) e flag `ambiguo` — falta exibir na tabela.
+- **Transparência do match na UI**: o motor já devolve `componentes` (scores parciais, código casado, estado da medida) e flag `ambiguo`, e desde a WO 0005 o `main.py` já carrega essas chaves no dicionário da correspondência — falta exibir na tabela (colunas novas + decisão de UX, WO 0006).
 
 ## ❌ Quebrado / Com Problema
-- **GUI ainda no motor antigo**: enquanto não integrar, a interface não se beneficia do score ponderado nem da guarda de código ausente.
 - **Golden set pequeno (24 casos)**: cobre os casos críticos conhecidos, mas precisa crescer com a pasta real completa (164 pisos) e com outros grupos (louças) para medir generalização.
 - **Pesos não calibrados formalmente**: os pesos atuais (`PesosScore`) passam no golden set, mas não foram otimizados; valores são razoáveis, não ótimos.
-- **Motor v2 ainda NÃO está na GUI**: `main.py` continua com o `MotorMatching` embutido, o `token_set_ratio` e os cinco utilitários duplicados. A carga da planilha já é a nova (FIX-005 corrigido), mas o matching que a interface roda ainda é o antigo. É a Parte B da WO 0003, que volta na WO 0005.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
-- [ ] Integrar `matching_engine.py` na GUI (`main.py`), removendo o `MotorMatching` embutido.
-- [ ] Exibir na tabela: componentes do score, código/token que casou, e alerta de ambiguidade (flag já existe).
+- [ ] Exibir na tabela: componentes do score, código/token que casou, e alerta de ambiguidade (chaves já chegam ao dict desde a WO 0005 — falta só a UI, ver WO 0006).
 - [ ] Expandir o golden set com a pasta real completa e com louças.
 - [ ] Dois thresholds separados (exibição × seleção) na UI.
 - [ ] Tornar `PesosScore` editável/persistível na aba Configurações.
@@ -47,6 +44,8 @@
 - `golden_set.csv` → fonte de verdade dos testes; toda mudança no motor passa por ele.
 
 ## 💬 Última conversa
+**Fecho (2026-09-05, sessão Code):** WO 0005 aplicada e fechada (`/apply-wo` + `/wrap`, mesma sessão) — commit `7199443`, push OK. Consertou de quebra o `NameError` que a Parte A da WO 0003 tinha deixado no `main.py` (chamava `carregar_planilha` sem importar) e completou a Parte B: GUI passa a importar `matching_engine.py`/`spreadsheet_loader.py` de `UTILITÁRIOS/`, removendo o `MotorMatching` embutido, a `REGEX_CODIGO` duplicada e os cinco utilitários atrasados (1458 → 1298 linhas). `ThreadVarredura` passa a receber `df`/`sufixos_cfg` por fora (o motor v2 não carrega pandas, DEC-002) e a consumir o `Resultado` do motor; sem-match por código ausente ganha a anotação `[código não cadastrado]`. Nove edições, todas as âncoras únicas, nenhum desvio. Validado: `pyflakes` 0 undefined-name, cinco contagens de sobra do motor antigo em 0, golden set 24/24, e teste manual dirigindo a `JanelaPrincipal` de verdade em modo offscreen — as 3 linhas do preview batem byte a byte com o esperado (incluindo o caso do sufixo composto `(A)v2` → `(Ambiente) _v2`, o risco mais traiçoeiro da WO) e o caso negativo caiu em sem-correspondência. **Correção de higiene:** a "Versão Atual" deste arquivo estava travada em `[0.4.0]` desde 2026-05-31, apesar do CHANGELOG já ter `[0.4.1]`/`[0.4.2]` registrados — corrigida para `[0.4.3]` nesta atualização. Transparência do match (`componentes`/`codigo_casado`/`ambiguo`) chega ao dict mas segue fora da UI, de propósito — é a WO 0006.
+
 **Fecho (2026-09-04, sessão Code):** WO 0004 aplicada e fechada (`/apply-wo` + `/wrap`, mesma sessão). Passo 0 fechou em commit próprio a Parte A da WO 0003 que estava presa sem commit desde a sessão anterior — `39d3fb6` (FIX-005: leitura da planilha sempre como texto, loader único `spreadsheet_loader.py` usado pela GUI e pelo harness). Golden set rechaveado por `Interno` com referência congelada em `test/planilha_referencia.csv` e harness sem fallback silencioso — `8c677e6` (DEC-008). Harness volta a **24/24**, roda **sem argumentos** e devolve código de saída 0/1/2; os quatro casos de prova de vida (feliz, golden no formato antigo, coluna ausente, expectativa errada) bateram exatamente 0/2/2/1. **Achado:** o checklist da própria WO citava 15 casos `SEM_MATCH`; o medido foi 13, número que já era o total em HEAD antes da WO (mapeamento 1:1 preservado) — tratado como erro de redação da WO, não como regressão (ver relatório em arquivo). A Parte B da WO 0003 (motor v2 na GUI) segue **fora de escopo**, vira WO 0005.
 
 **2026-09-03** — Migração para o contrato KCM v1.122.0 concluída e aplicada em disco pelo dono (ver DEC-007). Estrutura passou do layout flat antigo para `meta/` + `.claude/`; `CEREBRO.md` novo em v1.122.0 sem seção ASU; skills `apply-wo` e `wrap` adotadas; `HISTORICO.md` → `meta/HISTORY.md`. As linhas revogadas REV-2/REV-3/REV-4 morreram junto com o CEREBRO/CLAUDE antigos (substituição, não edição); o resíduo de REV-3 que sobrevivia neste arquivo foi corrigido por esta WO. Modo ASU desligado por decisão do dono. **Pendência de repositório [medido em 2026-09-03 22:30, `_MANIFEST_OAI.md`]:** a árvore tinha 10 modificados e 8 não rastreados sobre o commit `72f38c5`, com 5 arquivos de `meta/` fora do commit — confirmar `git add -A && git commit && git push` antes de abrir a próxima conversa **[RESOLVIDO em 2026-09-04, commit `b2d1c73`]**. Nenhuma linha de código foi tocada nesta conversa; o backlog de código segue intacto, com a integração do `matching_engine.py` na GUI como item 1.

@@ -5,8 +5,22 @@
 
 ## [Não lançado]
 ### Planejado
-- Reescrita do motor de matching (scoring ponderado) — ver DEC-002 e ROADMAP F2.
+- Exibir transparência do match na tabela (componentes, código casado, alerta de ambiguidade) — WO 0006.
 - Suíte de testes com golden set da pasta real de pisos.
+
+---
+
+## [0.4.3] — 2026-09-05
+### Corrigido
+- **`NameError` na carga de planilha.** A Parte A da WO 0003 (`39d3fb6`) trocou a leitura por `carregar_planilha()`, mas o import dessa função só chegava na Parte B, nunca aplicada — a GUI quebrava assim que alguém carregava uma planilha. Erro de desenho da WO, não de quem aplicou (import e chamada de uma mesma função separados em commits diferentes).
+
+### Modificado
+- **`main.py` passa a usar o motor de matching v2** (`UTILITÁRIOS/matching_engine.py` + `spreadsheet_loader.py`), removendo o `MotorMatching` embutido, a `REGEX_CODIGO` duplicada e os cinco utilitários atrasados (`limpar_valor_planilha`, `normalizar_texto`, `extrair_codigos`, `separar_sufixos`, `reescrever_sufixo`). `main.py`: 1458 → 1298 linhas.
+- `ThreadVarredura` recebe `df` e `sufixos_cfg` por fora (o motor v2 é puro Python e não carrega pandas — DEC-002) e consome o `Resultado` do motor em vez do dict do `MotorMatching` antigo.
+- Sem-match por código ausente (`código_ausente`, DEC-006) passa a ser anotado na lista com `[código não cadastrado]` em vez de cair misturado com qualquer outro sem-match.
+
+### Notas
+- O dicionário de cada correspondência já carrega `componentes`, `codigo_casado` e `ambiguo`, mas essas colunas **não aparecem na UI ainda** — decisão de UX pendente, fica para a WO 0006.
 
 ---
 

@@ -20,30 +20,35 @@ Ferramenta desktop (Windows) que organiza arquivos em massa usando uma planilha 
 - **Interface gráfica:** PySide6 (Qt6)
 - **Leitura de dados:** pandas + openpyxl (XLSX) / leitura nativa CSV
 - **Detecção de encoding:** chardet
-- **Comparação aproximada:** RapidFuzz (`fuzz`, `process`)
+- **Comparação aproximada:** RapidFuzz (`fuzz`, `process`) — usado dentro de `UTILITÁRIOS/matching_engine.py`, não em `main.py`
 - **Operações de arquivo:** pathlib + shutil (stdlib)
 - **Log/export:** openpyxl
 - **Build do executável:** PyInstaller (`--onefile --windowed`)
 - **Persistência de config:** JSON local (`config.json` ao lado do .exe)
-- **Testes:** (ainda não há suíte — ver STATUS/ROADMAP)
+- **Testes:** golden set + harness (`UTILITÁRIOS/test_matching.py`, sem argumentos, 24/24) — ver DEC-008
 
 ## Estrutura do Projeto
 ```
 OrganizadorArquivos/
-├── main.py                 # Aplicação inteira (monólito de ~1400 linhas, hoje)
-│   ├── UTILITÁRIOS         # encoding, normalização, regex de código, sufixos
-│   ├── MotorMatching       # núcleo: match por código (P1) + fuzzy (P2)
-│   ├── ThreadVarredura     # varredura+matching em background (QThread)
-│   ├── ThreadAcao          # renomear/copiar/mover em background (QThread)
-│   ├── AbaCorrespondencias # tabela de resultados editável + ações
-│   ├── AbaSemMatch         # arquivos sem correspondência
-│   ├── AbaConfiguracoes    # mapeamento de sufixos editável
-│   ├── AbaLog              # log + exportar Excel + desfazer
-│   └── JanelaPrincipal     # orquestra tudo + barra superior
-├── config.json             # gerado na 1ª execução (não versionar dados sensíveis)
-└── dist/OrganizadorArquivos.exe   # saída do PyInstaller
+├── main.py                       # GUI (~1300 linhas) — importa o motor, não o contém
+│   ├── ThreadVarredura            # varredura+matching em background (QThread)
+│   ├── ThreadAcao                 # renomear/copiar/mover em background (QThread)
+│   ├── AbaCorrespondencias        # tabela de resultados editável + ações
+│   ├── AbaSemMatch                # arquivos sem correspondência
+│   ├── AbaConfiguracoes           # mapeamento de sufixos editável
+│   ├── AbaLog                     # log + exportar Excel + desfazer
+│   └── JanelaPrincipal            # orquestra tudo + barra superior
+├── UTILITÁRIOS/
+│   ├── matching_engine.py        # MOTOR v2: MotorMatching, Resultado, PesosScore — puro Python, sem PySide6/pandas
+│   ├── spreadsheet_loader.py     # carregar_planilha(), coluna_como_texto() — loader único (GUI + harness)
+│   └── test_matching.py          # harness do golden set (ver test/)
+├── test/
+│   ├── planilha_referencia.csv   # referência congelada (119 linhas) — ver DEC-008
+│   └── golden_set.csv            # 24 casos, chave = Interno
+├── config.json                    # gerado na 1ª execução (não versionar dados sensíveis)
+└── dist/OrganizadorArquivos.exe  # saída do PyInstaller
 ```
-> Hoje tudo vive em `main.py`. O ROADMAP prevê modularização (separar motor de matching da GUI para permitir testes).
+> A modularização prevista no ROADMAP F2 está feita desde a WO 0005 (2026-09-05): o motor vive só em `UTILITÁRIOS/matching_engine.py`, testável isoladamente e sem duplicata em `main.py`.
 
 ## Convenções de Código
 - **Nomes:** arquivos/funções/variáveis em inglês quando possível; este projeto tem forte presença de PT-BR no domínio (nomes de colunas, rótulos de UI), então identificadores de domínio podem ser PT-BR.
@@ -54,6 +59,7 @@ OrganizadorArquivos/
 
 ## Como o MOTOR DE MATCHING funciona (CRÍTICO)
 > Esta é a peça que mais gera bug e a que mais precisa de cuidado. Leia antes de mexer.
+> **Implementação real:** `UTILITÁRIOS/matching_engine.py` (classe `MotorMatching`, dataclass `Resultado`). Desde a WO 0005, `main.py` só importa — não há mais motor embutido na GUI. O comportamento descrito abaixo é conceitual e continua valendo; para o scorer atual (ponderado, não `token_set_ratio`), ver DEC-002.
 
 O matching é **hierárquico**, em duas prioridades:
 
@@ -94,6 +100,8 @@ Compara a *base* do nome do arquivo (sem extensão, sem sufixo, normalizada) com
 8. **Deixar a regex de código capturar dimensões** — `33X57`, `50MT²` parecem código e fazem produtos de mesma medida casarem entre si (confiança 100 falsa). → Excluir medidas/dimensões de `extrair_codigos` (FIX-004). Medida é campo discriminante (DEC-005), nunca âncora de código.
 9. **Assumir que medida é ruído / que a ferramenta é só para pisos** — FALSO: 27 medidas distintas em 80 linhas; a ferramenta atende vários grupos de produto. Medida discrimina e a planilha varia por grupo. → Tratar medida como campo discriminante com penalidade de divergência (DEC-005).
 10. **Deduzir a estrutura do repositório a partir do mount** — O mount do Projeto é ACHATADO: não tem subpastas, então `meta/CEREBRO.md` chega como `CEREBRO.md` e `.claude/skills/wrap/SKILL.md` chega como `SKILL__wrap.md`. Deduzir layout daí produz conclusão errada sobre o repo real (já custou uma volta inteira: gerou-se uma "limpeza" de arquivos que já estavam nos lugares certos). → **Ler `_MANIFEST_OAI.md` primeiro**: ele mapeia cada nome plano ao caminho original, traz a raiz em disco e uma foto do Git (último commit, modificados, não rastreados). Nomes com ponto inicial chegam com `_` (`.gitignore` → `_gitignore`).
+11. **Carregar a planilha sem forçar texto** — coluna cujos valores são todos numéricos (código interno, código de referência) é inferida `int64` pelo pandas, e `00611` vira `611` **antes** de qualquer `str()` do código. Não dá erro, não avisa — o zero à esquerda só falta no nome final do arquivo ou no match por código (FIX-005). → `carregar_planilha()` em `UTILITÁRIOS/spreadsheet_loader.py` sempre lê com `dtype=str` + `keep_default_na=False`. É o loader único; não reintroduza uma segunda leitura solta em `main.py` ou no harness.
+12. **Tratar `UTILITÁRIOS/` como candidato a virar pacote Python** — o nome tem acento (não é identificador Python válido), então `import UTILITÁRIOS.matching_engine` não funciona. → `main.py` faz `sys.path.insert(0, str(Path(__file__).resolve().parent / "UTILITÁRIOS"))` e importa `matching_engine`/`spreadsheet_loader` direto, com `# noqa: E402` nos imports (dependem do `sys.path` da linha acima, não podem subir). Virar pacote de verdade (`core/` + `__init__.py`) é mudança de nome de pasta — decisão do dono, registrada no backlog, não faça sozinho.
 
 ## Contexto de Produto
 - **Usuário-alvo:** dono/operador de loja de materiais de construção que mantém imagens de produtos e uma planilha-mestre (Google Sheets) com marca, código de referência, descrição, tipo, material, etc.

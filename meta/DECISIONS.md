@@ -234,3 +234,15 @@ Três mudanças, juntas:
 O harness volta a 24/24 e passa a ser reexecutável por qualquer um, a qualquer hora, sem insumo externo. O preço é conhecido e aceito: a referência congelada envelhece — quando ela for atualizada, o `interno_esperado` continua válido (é a chave primária da loja), mas os casos `SEM_MATCH` precisam ser reconferidos, porque um produto antes ausente pode ter sido cadastrado.
 
 **Achado que sobreviveu à investigação:** o caso `R70031` derrubou a derivação ingênua por substring e provou o motor. O esperado derivado dizia `SEM_MATCH`; o motor devolveu `Interno` 16737 via `codigo_casado='R70031~R7003'` — match bidirecional correto (FIX-001) numa linha **sem código de referência**. O motor estava certo e a derivação errada; foi esse caso que definiu a chave.
+
+---
+
+## FIX-006 — `NameError` em produção: WO partida em duas deixou `main.py` quebrado entre commits
+**Data:** 2026-09-05
+
+- **Sintoma:** `main.py` levantava `NameError: name 'carregar_planilha' is not defined` no exato momento em que o usuário carregava uma planilha na GUI — o caminho mais básico da ferramenta.
+- **Causa raiz:** a Parte A da WO 0003 (commit `39d3fb6`, FIX-005) trocou a leitura da planilha por `self.df = carregar_planilha(caminho)`, mas o `import` dessa função vivia na **edição B1** da Parte B da mesma WO, nunca aplicada. Ficou um estado intermediário em que a chamada existia sem o import correspondente. Três redes existentes e nenhuma pegou: `ast.parse` (validação da Parte A) só vê sintaxe, não nomes em tempo de execução; o golden set (`test_matching.py`) não importa `main.py`; o teste manual da GUI estava descrito na Parte B, que não rodou.
+- **Solução:** WO 0005 aplicou a Parte B (import + demais 8 edições) na mesma sessão em que consertou o `NameError`, e o checklist da WO passou a exigir `python -m pyflakes main.py` com zero linhas `undefined name` — checagem de execução, não só de sintaxe.
+- **Lição:** dividir uma WO em duas partes é seguro quando cada parte deixa o repositório num estado que RODA. Separar a chamada de uma função do import dessa mesma função em commits diferentes garante um estado quebrado no meio — mesmo que cada metade passe `ast.parse` isoladamente. **Erro de desenho da WO, não de quem aplicou cada parte.** Vira critério de aceite: toda WO que altera `main.py` roda `pyflakes` antes do commit, não só depois.
+
+

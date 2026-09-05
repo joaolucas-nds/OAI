@@ -66,9 +66,6 @@ Padrões coletados: barra de ações contextual flutuante ao selecionar linhas (
 
 ---
 
-### 2026-09-04 — Loader único de planilha (GUI + harness)
-Hoje a planilha é carregada em dois lugares independentes — `main.py` (detecta encoding e separador à mão) e `test_matching.py` (`sep=None`) — e os dois carregam errado da mesma forma (FIX-005: sem `dtype=str`). Reunir num `carregar_planilha()` compartilhado faz a correção acontecer uma vez só, torna a carga testável isoladamente (hoje ela vive dentro de um método Qt) e tira uma duplicação que a integração do motor na GUI herdaria. Entra junto com essa integração.
-
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
 - **Match hierárquico código→fuzzy** — implementado / ver DEC-001.
@@ -79,6 +76,8 @@ Hoje a planilha é carregada em dois lugares independentes — `main.py` (detect
 - **Modularizar: motor de matching sem PySide6** — implementado em 0.4.0 (`matching_engine.py`) / ROADMAP F2.
 - **Golden set versionado + harness** — implementado em 0.4.0 (`golden_set.csv`, `test_matching.py`) / ROADMAP F2.
 - **Score ponderado substituindo token_set_ratio** — implementado em 0.4.0 / ver DEC-002, DEC-005.
+- **Loader único de planilha (GUI + harness)** — `carregar_planilha()`/`coluna_como_texto()` em `UTILITÁRIOS/spreadsheet_loader.py`, implementado em 0.4.2 (FIX-005) e consumido por `main.py` desde 0.4.3 (WO 0005) — a duplicação de leitura entre GUI e harness acabou.
+- **Integrar `matching_engine.py` na GUI (motor v2 na interface)** — implementado em 0.4.3 (WO 0005): `main.py` importa o motor de `UTILITÁRIOS/`, sem `MotorMatching` embutido. Ver ROADMAP F2 e FIX-006 (consertou de quebra o `NameError` que a divisão da WO 0003 tinha deixado).
 
 ---
 
