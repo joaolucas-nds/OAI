@@ -17,7 +17,7 @@
 - **Código não ancora em medidas**: `33X57`, `50MT²` excluídos da extração de código (corrige `61838`→`39182`).
 - **Match por código bidirecional** (P1) — resolve `PR70671↔PR7067`, `R70181↔R7018`.
 - **Sufixos compostos** (`(A)v2`) detectados e reescritos preservando ordem.
-- **Golden set + harness** (`test_matching.py`): 24/24 (100%) e auto-match 80/80.
+- **Golden set + harness** (`UTILITÁRIOS/test_matching.py`): **24/24 (100%)** contra a referência congelada `test/planilha_referencia.csv`. Roda **sem argumentos** e devolve código de erro (0/1/2) — ver DEC-008. Chave é o `Interno`, não o índice da linha.
 - (Herdado da GUI 0.3.1) carregamento CSV/XLSX, 5 ações, log+desfazer, sufixos configuráveis, persistência.
 
 ## 🔧 Em Progresso
@@ -28,7 +28,7 @@
 - **GUI ainda no motor antigo**: enquanto não integrar, a interface não se beneficia do score ponderado nem da guarda de código ausente.
 - **Golden set pequeno (24 casos)**: cobre os casos críticos conhecidos, mas precisa crescer com a pasta real completa (164 pisos) e com outros grupos (louças) para medir generalização.
 - **Pesos não calibrados formalmente**: os pesos atuais (`PesosScore`) passam no golden set, mas não foram otimizados; valores são razoáveis, não ótimos.
-- **Zero à esquerda comido na carga da planilha (FIX-005)**: `read_csv`/`read_excel` sem `dtype=str` convertem coluna numérica em `int64` e `00611` vira `611`. Quebra o novo nome **e** mata o match por código (`611` tem 3 chars e nem casa com a regex, então a linha fica sem código e o produto é ignorado). Causa raiz reproduzida em 2026-09-04; atinge `main.py` e `test_matching.py`. Correção vai junto com a integração do motor na GUI.
+- **Motor v2 ainda NÃO está na GUI**: `main.py` continua com o `MotorMatching` embutido, o `token_set_ratio` e os cinco utilitários duplicados. A carga da planilha já é a nova (FIX-005 corrigido), mas o matching que a interface roda ainda é o antigo. É a Parte B da WO 0003, que volta na WO 0005.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 - [ ] Integrar `matching_engine.py` na GUI (`main.py`), removendo o `MotorMatching` embutido.
@@ -37,8 +37,9 @@
 - [ ] Dois thresholds separados (exibição × seleção) na UI.
 - [ ] Tornar `PesosScore` editável/persistível na aba Configurações.
 - [ ] Decidir tratamento do `código_ausente` na UI: aba separada "Código não cadastrado"?
-- [ ] Corrigir a carga da planilha (FIX-005): `dtype=str` + `keep_default_na=False` num loader único usado pela GUI e pelo harness. Vai junto com a integração do motor.
-- [ ] Ampliar o golden set com um caso de código de zero à esquerda contra uma coluna de código **pura** — a coluna descritiva usada hoje esconde o defeito.
+- [ ] **Confirmar a convenção de nome dos arquivos de imagem.** A coluna `Nome Imagem` passou de 3 campos (`MARCA - CÓDIGO - DESCRIÇÃO`) para 4 (`MARCA - INTERNO - CÓDIGO - DESCRIÇÃO`), mas os 24 nomes do golden set ainda são do formato de 3. Não sabemos se os arquivos reais do dono acompanharam. Se acompanharam, o golden set precisa de casos no formato novo. *[pergunta aberta, não medida]*
+- [ ] **Rebaselinar o "auto-match 80/80".** Aquele número era contra um export de 80 linhas que não existe mais; a referência de hoje tem 119. Enquanto não for remedido, não citar 80/80 como estado atual.
+- [ ] Ampliar o golden set com um caso de código de zero à esquerda cuja coluna de matching seja **puramente numérica** — a referência congelada usa `Nome Imagem`, que é texto e não exercita o FIX-005.
 
 ## 📁 Arquivos Críticos (não mexer sem contexto)
 - `matching_engine.py` → coração do acerto v2. Ler CONTEXT «MOTOR DE MATCHING» + DEC-001/002/005/006 antes de tocar. Mudou? Rodar `test_matching.py` antes de aceitar.

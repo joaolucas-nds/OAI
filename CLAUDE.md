@@ -8,8 +8,8 @@
 Leia `meta/CEREBRO.md` → o doc de contexto do projeto (ex.: `meta/CONTEXT.md`) → `meta/STATUS.md` antes de agir. Confirme em uma frase o que entendeu.
 
 ## Build / validação
-- Build: `<seu comando de build, ex.: npm run build>`  (PLACEHOLDER — troque pelo do seu projeto)
-- Testes/validação: `<seu comando de teste>` — rode antes de commitar mudança de código.
+- Build: `pyinstaller --onefile --windowed main.py` — gera o `.exe` em `dist/`. **Só quando o dono pedir**; não faz parte da validação de rotina.
+- Testes/validação: `python UTILITÁRIOS/test_matching.py` — **sem argumentos**. Roda contra a referência congelada em `test/` e sai com código 0 (tudo passou), 1 (algum caso falhou) ou 2 (insumo inválido). Alvo: **24/24**. Rode antes de commitar qualquer mudança em `main.py`, `UTILITÁRIOS/matching_engine.py` ou `UTILITÁRIOS/spreadsheet_loader.py`. Se sair 2, o problema é o insumo e não o motor — leia a mensagem antes de mexer em código.
 - Mudança só de doc (meta/) NÃO precisa de build; a rede é o `git diff`.
 - Adicione seus comandos de build/teste ao `allow` de `.claude/settings.json`.
 

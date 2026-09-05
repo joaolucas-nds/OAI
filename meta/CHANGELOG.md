@@ -10,6 +10,21 @@
 
 ---
 
+## [0.4.2] — 2026-09-04
+### Corrigido
+- **FIX-005 — planilha lida sempre como texto.** `dtype=str` + `keep_default_na=False` num loader único (`UTILITÁRIOS/spreadsheet_loader.py`) usado pela GUI e pelo harness. Antes o pandas inferia `int64` numa coluna de código e `00611` virava `611`, o que comia o zero no nome final e matava o match por código. Verificado por par negativo.
+- **Harness escolhia a coluna sozinho.** O fallback "primeira coluna com ` - `" passou a apontar para `Descrição` quando o esquema do export mudou, e o teste seguiu dando número medindo outra coisa. Agora as colunas são explícitas e coluna ausente aborta — ver DEC-008.
+
+### Modificado
+- **Golden set rechaveado** de índice de linha para `Interno` (código interno), e `-1` virou `SEM_MATCH`. Índice absoluto muda a cada reexport e não é propriedade do produto.
+- **Referência congelada** em `test/planilha_referencia.csv` (119 linhas). O harness roda sem argumentos e devolve código de saída 0/1/2.
+- `CLAUDE.md` ganhou os comandos reais de build e validação, que eram PLACEHOLDER desde a migração.
+
+### Notas
+- A integração do motor v2 na GUI (Parte B da WO 0003) **não** entrou nesta versão. `main.py` ainda faz matching com o motor antigo.
+
+---
+
 ## [0.4.1] — 2026-09-03
 ### Modificado
 - **Migração para o contrato KCM v1.122.0** — layout `meta/` + `.claude/`, modo Code ligado, ASU desligado. Ver DEC-007.

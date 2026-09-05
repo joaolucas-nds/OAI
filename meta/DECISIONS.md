@@ -208,3 +208,29 @@ Estrutura alinhada ao KCM v1.122.0. Os 4 carimbos de versão conferem em v1.122.
 - **Risco da correção:** nenhum. *[medido — varredura de `main.py` em 2026-09-04]* nenhuma coluna do DataFrame é usada como número; as únicas leituras são `df[col_matching].fillna("").astype(str)` (241), `str(linha[self.col_novo_nome])` (377) e `str(linha[self.col_pasta_destino]).strip()` (393).
 - **O que NÃO está provado:** não tenho a planilha real do dono, então qual coluna ele tinha selecionado ao ver cada sintoma é *dedução*, não medição. A causa raiz está reproduzida; o mapeamento sintoma→coluna é a explicação mais econômica que cobre os dois relatos.
 - **Lição:** planilha é TEXTO. A inferência de tipo do pandas é uma armadilha silenciosa em qualquer coluna que seja identificador — não dá erro, não avisa, e o dano só aparece no nome do arquivo final. Vira armadilha em `CONTEXT.md` **junto com a correção**, não antes.
+
+---
+
+## DEC-008 — Golden set com referência congelada e chave por código interno
+**Data:** 2026-09-04 · **Status:** aceita (decisão do usuário: "a forma mais profissional e completa")
+
+### Contexto
+A WO 0003 parou com 13/24 no golden set e a suspeita registrada foi "a ordem das linhas mudou no reexport". Medindo em vez de aceitar, a causa era outra e pior: o **esquema do export mudou**. A coluna que o harness procurava (`"Atual: 14/04/2026 - Anterior: 14/04/2026"`) não existe mais, e o fallback — *a primeira coluna cujos valores contenham `" - "`* — passou a escolher `Descrição`, uma descrição curta sem marca e sem código. A coluna certa é `Nome Imagem`. O teste **trocou em silêncio o que estava medindo** e continuou dando um número.
+
+Somava-se a isso o índice absoluto da linha como chave de verdade, que muda a cada reexport, e a dependência de um arquivo que não está no repositório — o harness só rodava se alguém achasse um export solto no disco.
+
+### Decisão
+Três mudanças, juntas:
+1. **Referência congelada** em `test/planilha_referencia.csv` (o export `011 - Pisos e Revestimentos`, 119 linhas). O harness roda **sem argumentos** e não depende de mais ninguém.
+2. **Chave por `Interno`** (código interno da loja), não por índice de linha. Medido nos três exports: `Interno` tem 0 vazios e é 100% único (119/119, 92/92, 99/99). `Código Referência` **não serve** — 7 vazios e 111 únicos em 119.
+3. **Fim do fallback silencioso.** Colunas explícitas em constantes; coluna ausente aborta com código 2 e imprime as colunas encontradas. O harness passa a devolver código de erro (0/1/2).
+
+### Alternativas consideradas
+- **Só rechavear, sem congelar referência** — resolve a reordenação, mas mantém o harness dependente de um arquivo externo, que foi o que queimou o ciclo da WO 0003.
+- **Só congelar, mantendo o índice** — determinístico, mas o golden set morre de novo assim que a referência for regenerada.
+- **Chave por `Código Referência`** — descartada por medição: 7 linhas do catálogo não têm código, e uma delas (`Interno` 16737) é justamente o alvo do caso `R70031`.
+
+### Consequências
+O harness volta a 24/24 e passa a ser reexecutável por qualquer um, a qualquer hora, sem insumo externo. O preço é conhecido e aceito: a referência congelada envelhece — quando ela for atualizada, o `interno_esperado` continua válido (é a chave primária da loja), mas os casos `SEM_MATCH` precisam ser reconferidos, porque um produto antes ausente pode ter sido cadastrado.
+
+**Achado que sobreviveu à investigação:** o caso `R70031` derrubou a derivação ingênua por substring e provou o motor. O esperado derivado dizia `SEM_MATCH`; o motor devolveu `Interno` 16737 via `codigo_casado='R70031~R7003'` — match bidirecional correto (FIX-001) numa linha **sem código de referência**. O motor estava certo e a derivação errada; foi esse caso que definiu a chave.
