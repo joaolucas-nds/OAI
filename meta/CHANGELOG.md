@@ -5,8 +5,22 @@
 
 ## [Não lançado]
 ### Planejado
-- Exibir transparência do match na tabela (componentes, código casado, alerta de ambiguidade) — WO 0006.
 - Suíte de testes com golden set da pasta real de pisos.
+
+---
+
+## [0.4.4] — 2026-09-05
+### Adicionado
+- **Coluna "Por quê" na tabela de correspondências.** Resumo curto por método — `código <X>` para match por código, `sort NN · wratio NN · cob NN · medida <estado>` para fuzzy — com o detalhe completo (os componentes do score) no tooltip, replicado na célula "Por quê" e na de "Score". `IDX_NOVO_NOME`/`IDX_PASTA_DEST` deslocaram 7→8 e 8→9; a tabela foi de 9 para 10 colunas. Ver DEC-009.
+- **Alerta visual de ambiguidade.** Linha com `ambiguo=True` ganha `⚠ ambíguo · ` na frente do resumo e a célula de Score pintada de âmbar (sobrescrevendo a faixa verde/amarela/vermelha). O checkbox **não** é desmarcado — mudar a seleção sozinho esconderia arquivo do usuário.
+- **Aba "Sem correspondência" agrupada por motivo.** Dois blocos com contagem — `CÓDIGO NÃO CADASTRADO (n)` (trabalho na planilha: cadastrar o produto) e `SEM CORRESPONDÊNCIA (n)` (trabalho no matching: conferir nome, baixar threshold) — separados por uma régua.
+
+### Modificado
+- **O sinal `sem_match` passa a carregar `dict` estruturado** (`caminho`, `motivo`, `score`) em vez de `str` decorada. Sai a anotação `[código não cadastrado]` embutida no caminho (paliativo da 0.4.3) — agrupar e contar não depende mais de parsear texto de volta. Único consumidor: `AbaSemMatch.popular`.
+- `main.py`: 1298 → 1395 linhas. Motor de matching **não** tocado.
+
+### Notas
+- Ambiguidade fim-a-fim segue **sem verificação de instrumento**: a referência congelada produz 0 casos ambíguos, então só o render do prefixo/cor foi exercitado (por injeção de flag), não o caminho de detecção.
 
 ---
 

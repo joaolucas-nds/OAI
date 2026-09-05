@@ -245,4 +245,25 @@ O harness volta a 24/24 e passa a ser reexecutável por qualquer um, a qualquer 
 - **Solução:** WO 0005 aplicou a Parte B (import + demais 8 edições) na mesma sessão em que consertou o `NameError`, e o checklist da WO passou a exigir `python -m pyflakes main.py` com zero linhas `undefined name` — checagem de execução, não só de sintaxe.
 - **Lição:** dividir uma WO em duas partes é seguro quando cada parte deixa o repositório num estado que RODA. Separar a chamada de uma função do import dessa mesma função em commits diferentes garante um estado quebrado no meio — mesmo que cada metade passe `ast.parse` isoladamente. **Erro de desenho da WO, não de quem aplicou cada parte.** Vira critério de aceite: toda WO que altera `main.py` roda `pyflakes` antes do commit, não só depois.
 
+---
+
+## DEC-009 — Transparência do match na UI: uma coluna "Por quê", ambiguidade como alerta, `código_ausente` agrupado
+**Data:** 2026-09-05 · **Status:** aceita (UX delegada ao assistente pelo dono: "aceito a forma que voce recomendar") · **Aplicada:** WO 0006, `9e99f5f`, 0.4.4
+
+### Contexto
+Desde a WO 0005 o dicionário de cada correspondência carrega `componentes` (cinco scores parciais), `codigo_casado` e `ambiguo` — e nada disso aparecia na tela. O usuário via um número de score e a palavra "fuzzy", sem como saber *por que* a linha casou. Junto vinha a segunda metade: `código_ausente` (DEC-006) caía na aba "Sem correspondência" com a anotação `[código não cadastrado]` **enfiada dentro da string do caminho** — paliativo da WO 0005 que misturava dois casos de ação diferente e não dava para contar sem parsear texto.
+
+### Decisão
+Quatro escolhas de UX, cada uma com alternativa real descartada:
+
+1. **Uma coluna nova, "Por quê" — não cinco.** `componentes` tem cinco campos, mas ficam todos vazios num match por código, que é a maioria dos casos. Cinco colunas vazias custam legibilidade e não pagam nada. A coluna traz um resumo curto por método (`código PR12147` / `sort 83.5 · wratio 95.0 · cob 85.7 · medida coincide`); o detalhe completo vai no **tooltip**, na célula "Por quê" e também na de "Score". *Custo:* o resumo é texto, não número ordenável — quem quiser ordenar por `cobertura` não consegue.
+2. **Ambiguidade é alerta, não coluna.** Vira `⚠ ambíguo · ` na frente do resumo e pinta a célula de Score de âmbar (`#ffe0b2`), mesmo com score alto. *Custo:* o âmbar **sobrescreve** a cor verde/amarela/vermelha do score naquela linha — de propósito, porque "alto mas ambíguo" é exatamente o caso que não pode parecer tranquilo.
+3. **O checkbox NÃO é desmarcado automaticamente em linha ambígua.** Desmarcar mudaria o conjunto a renomear sem o usuário pedir — falha silenciosa. O alerta é visual, não um bloqueio. *Custo:* se executar sem olhar, a linha ambígua entra junto.
+4. **`código_ausente` NÃO vira aba nova.** Vira uma **seção com contagem** dentro da aba que já existe (`CÓDIGO NÃO CADASTRADO (n)` / `SEM CORRESPONDÊNCIA (n)`, separadas por régua). Terceira aba fragmentaria um fluxo para um caso que continua sendo o mesmo destino ("arquivos não renomeados"); o que muda é a **ação** — cadastrar o produto na planilha vs. conferir nome / baixar threshold. *Custo:* com muitos arquivos a aba vira um `QTextEdit` longo sem filtro; se incomodar na pasta real de 164 pisos, vira tabela numa WO futura.
+
+**Efeito colateral estrutural:** o sinal `sem_match` deixou de ser `list[str]` e passou a `list[dict]` com `caminho`, `motivo` e `score`. Necessário — agrupar e contar parseando `[código não cadastrado]` de volta da string seria frágil. Único consumidor: `AbaSemMatch.popular`.
+
+### Consequências
+O motor **não foi tocado** (fora de escopo): se a transparência revelar um score errado, é achado para outra WO. Ambiguidade fim-a-fim segue **sem verificação** — a referência congelada produz 0 casos ambíguos, então só o *render* do caminho (b) foi exercitado (por injeção de flag), não a detecção. Ficam no backlog: dois thresholds (exibição × seleção), `PesosScore` editável, exportar a transparência no log/CSV.
+
 
