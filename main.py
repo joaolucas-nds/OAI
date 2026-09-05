@@ -174,10 +174,13 @@ class ThreadVarredura(QThread):
                 # claro que nao existe na planilha. Por ora cai em "Sem
                 # correspondência" como qualquer outro, mas levando o motivo.
                 if res.indice is None:
-                    if res.metodo == "código_ausente":
-                        sem_match.append(f"{arq}  [código não cadastrado]")
-                    else:
-                        sem_match.append(str(arq))
+                    # Motivo ESTRUTURADO, nao embutido no texto: a aba precisa
+                    # agrupar e contar, e parsear string de volta seria frágil.
+                    sem_match.append({
+                        "caminho": str(arq),
+                        "motivo": res.metodo,   # "código_ausente" | "nenhum"
+                        "score": res.score,
+                    })
                     continue
 
                 idx = res.indice
@@ -441,7 +444,7 @@ class DialogConfirmacao(QDialog):
 
 COLUNAS_TABELA = [
     "✔", "Nome original", "Base detectada", "Sufixo", "Correspondência planilha",
-    "Score", "Método", "Novo nome (editável)", "Pasta destino",
+    "Score", "Método", "Por quê", "Novo nome (editável)", "Pasta destino",
 ]
 IDX_CHECK = 0
 IDX_NOME_ORIG = 1
@@ -450,8 +453,57 @@ IDX_SUFIXO = 3
 IDX_MATCH = 4
 IDX_SCORE = 5
 IDX_METODO = 6
-IDX_NOVO_NOME = 7
-IDX_PASTA_DEST = 8
+IDX_PORQUE = 7
+IDX_NOVO_NOME = 8
+IDX_PASTA_DEST = 9
+
+
+def resumir_match(item: dict) -> tuple[str, str]:
+    """
+    Traduz a transparência do motor em (texto curto da célula, tooltip detalhado).
+
+    Uma coluna só, e não uma por componente: `componentes` traz cinco campos que
+    ficam TODOS vazios num match por código — e match por código é a maioria dos
+    casos. Cinco colunas vazias na maior parte das linhas custam legibilidade e
+    não pagam nada. O detalhe completo vai no tooltip, que não ocupa espaço.
+    """
+    metodo = item.get("metodo", "")
+    comp = item.get("componentes") or {}
+    ambiguo = bool(item.get("ambiguo"))
+
+    if metodo == "código":
+        curto = f"código {item.get('codigo_casado', '')}".strip()
+        detalhe = (
+            f"Casou pelo código de referência: {item.get('codigo_casado', '—')}\n"
+            f"Match por código é exato ou bidirecional (FIX-001) e vale 100 —\n"
+            f"os componentes do score fuzzy não são calculados neste caminho."
+        )
+    elif metodo == "fuzzy" and comp:
+        curto = (
+            f"sort {comp.get('token_sort', '?')} · "
+            f"wratio {comp.get('wratio', '?')} · "
+            f"cob {comp.get('cobertura', '?')} · "
+            f"medida {comp.get('medida', '?')}"
+        )
+        detalhe = (
+            f"Sem código utilizável — casou por score ponderado (DEC-002).\n"
+            f"  token_sort    {comp.get('token_sort', '?')}\n"
+            f"  WRatio        {comp.get('wratio', '?')}\n"
+            f"  cobertura     {comp.get('cobertura', '?')}%  (tokens da planilha presentes no arquivo)\n"
+            f"  medida        {comp.get('medida', '?')}  (ajuste {comp.get('ajuste_medida', 0)})\n"
+            f"Medida divergente penaliza forte — ver DEC-005."
+        )
+    else:
+        curto = comp.get("motivo", "—")
+        detalhe = curto
+
+    if ambiguo:
+        curto = f"⚠ ambíguo · {curto}"
+        detalhe += (
+            "\n\nAMBÍGUO: o segundo melhor candidato ficou dentro da margem.\n"
+            "A linha continua marcada, mas confira antes de executar."
+        )
+    return curto, detalhe
 
 
 class AbaCorrespondencias(QWidget):
@@ -607,9 +659,24 @@ class AbaCorrespondencias(QWidget):
             else:
                 score_item.setBackground(QColor("#fad4d4"))
                 score_item.setForeground(QColor("#8b1c1c"))
+            # Ambiguidade e ALERTA, nao nota: mesmo com score alto a celula vai
+            # de ambar, para o olho parar nela. O checkbox NAO e desmarcado —
+            # mudar selecao por conta propria esconderia arquivo do usuario.
+            if item.get("ambiguo"):
+                score_item.setBackground(QColor("#ffe0b2"))
+                score_item.setForeground(QColor("#8a4b00"))
             self.tabela.setItem(row, IDX_SCORE, score_item)
 
             self.tabela.setItem(row, IDX_METODO, _cell(item["metodo"]))
+
+            # Por que esta linha casou — resumo na celula, detalhe no tooltip.
+            curto, detalhe = resumir_match(item)
+            porque_item = _cell(curto)
+            porque_item.setToolTip(detalhe)
+            score_item.setToolTip(detalhe)
+            if item.get("ambiguo"):
+                porque_item.setForeground(QColor("#8a4b00"))
+            self.tabela.setItem(row, IDX_PORQUE, porque_item)
 
             # Novo nome: editável
             novo_nome_item = QTableWidgetItem(item["novo_nome"])
@@ -667,11 +734,41 @@ class AbaSemMatch(QWidget):
         self.lista.setReadOnly(True)
         layout.addWidget(self.lista)
 
-    def popular(self, arquivos: list[str]):
-        if arquivos:
-            self.lista.setPlainText("\n".join(arquivos))
-        else:
+    def popular(self, arquivos: list[dict]):
+        """
+        Agrupa por MOTIVO, porque os dois grupos pedem ações diferentes:
+        "código não cadastrado" é trabalho na planilha (cadastrar o produto);
+        "nenhuma correspondência" é trabalho no matching (baixar o threshold,
+        conferir o nome). Misturar os dois numa lista só esconde essa diferença.
+        Não vira aba separada: continuam sendo o mesmo destino do usuário.
+        """
+        if not arquivos:
             self.lista.setPlainText("(Nenhum arquivo sem correspondência — ótimo!)")
+            return
+
+        ausentes = [a for a in arquivos if a.get("motivo") == "código_ausente"]
+        outros = [a for a in arquivos if a.get("motivo") != "código_ausente"]
+
+        blocos = []
+        if ausentes:
+            blocos.append(
+                f"CÓDIGO NÃO CADASTRADO ({len(ausentes)})\n"
+                "O arquivo tem um código de referência claro que não existe na "
+                "planilha.\nO motor NÃO tenta adivinhar por semelhança (DEC-006) — "
+                "provavelmente\nfalta cadastrar o produto.\n\n"
+                + "\n".join(a["caminho"] for a in ausentes)
+            )
+        if outros:
+            blocos.append(
+                f"SEM CORRESPONDÊNCIA ({len(outros)})\n"
+                "Nenhuma linha passou do threshold. Confira o nome do arquivo ou "
+                "baixe o threshold.\n\n"
+                + "\n".join(
+                    f"{a['caminho']}   (melhor score: {a.get('score', 0)})"
+                    for a in outros
+                )
+            )
+        self.lista.setPlainText(("\n\n" + "─" * 70 + "\n\n").join(blocos))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
